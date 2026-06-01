@@ -1,0 +1,12 @@
+[
+  {
+    "name": "SEFAZ MG - NTs",
+    "url": "http://www.nfe.fazenda.gov.br/portal/listaConteudo.aspx?tipoConteudo=ndIjl+iEFdE=",
+    "selector": ".data-pub"
+  },
+  {
+    "name": "Receita Federal - EFD-Reinf",
+    "url": "https://www.gov.br/receitafederal/pt-br/assuntos/orientacao-tributaria/declaracoes-e-demonstrativos/efd-reinf",
+    "selector": ".document-date"
+  }
+]

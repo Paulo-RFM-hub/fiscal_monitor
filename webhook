@@ -1,0 +1,27 @@
+https://realteccombr.webhook.office.com/webhookb2/90822a71-5e81-4d6f-9cd3-5f1c655d4c94@62b87257-cf3d-47a6-a3a7-6133a558f8b0/IncomingWebhook/30f6bb17840344449bed32c90383e2d6/74d1f71c-af02-473a-880d-7378990546c2/V2nfhjWj44F43lRES89Bk9jQTJpYHQHeptYvIeK64jAsk1
+
+
+https://realteccombr.webhook.office.com/webhookb2/90822a71-5e81-4d6f-9cd3-5f1c655d4c94@62b87257-cf3d-47a6-a3a7-6133a558f8b0/IncomingWebhook/4c13654dd4e34b489150a7fc0de9e458/74d1f71c-af02-473a-880d-7378990546c2/V2YfoTLi9B8srpnZuchY7GKk2_-Il8zU-O29a88kz6IVA1
+
+
+
+python -m monitor config --webhook "https://outlook.office.com/webhook/https://realteccombr.webhook.office.com/webhookb2/90822a71-5e81-4d6f-9cd3-5f1c655d4c94@62b87257-cf3d-47a6-a3a7-6133a558f8b0/IncomingWebhook/4c13654dd4e34b489150a7fc0de9e458/74d1f71c-af02-473a-880d-7378990546c2/V2YfoTLi9B8srpnZuchY7GKk2_-Il8zU-O29a88kz6IVA1"
+
+
+
+
+
+https://default62b87257cf3d47a6a3a76133a558f8.b0.environment.api.powerplatform.com:443/powerautomate/automations/direct/workflows/4af75a840e294302a96af0892394df48/triggers/manual/paths/invoke?api-version=1&sp=%2Ftriggers%2Fmanual%2Frun&sv=1.0&sig=F8Nzu8NmEN4Ll3U-5lCpWwbkWMyIDR79oz-fWwe3G9A
+
+
+POST <https://default62b87257cf3d47a6a3a76133a558f8.b0.environment.api.powerplatform.com:443/powerautomate/automations/direct/workflows/4af75a840e294302a96af0892394df48/triggers/manual/paths/invoke?api-version=1&sp=%2Ftriggers%2Fmanual%2Frun&sv=1.0&sig=F8Nzu8NmEN4Ll3U-5lCpWwbkWMyIDR79oz-fWwe3G9A>
+Content-Type: application/json
+{
+    "text": "Hello from a webhook workflow!"
+}
+
+
+
+curl -X POST "https://default62b87257cf3d47a6a3a76133a558f8.b0.environment.api.powerplatform.com:443/powerautomate/automations/direct/workflows/4af75a840e294302a96af0892394df48/triggers/manual/paths/invoke?api-version=1&sp=%2Ftriggers%2Fmanual%2Frun&sv=1.0&sig=F8Nzu8NmEN4Ll3U-5lCpWwbkWMyIDR79oz-fWwe3G9A" \
+  -H "Content-Type: application/json" \
+  -d '{"text": "✅ Teste Power Automate"}'
