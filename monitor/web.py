@@ -64,10 +64,12 @@ def create_app():
     def check_all():
         storage = MonitorStorage()
         monitors = storage.list_monitors()
-        results = []
+        updated = []
         for m in monitors:
-            results.append((m, _check_monitor(storage, m)))
-        return render_template_string(CHECK_ALL_TEMPLATE, results=results)
+            res = _check_monitor(storage, m)
+            if res.get("status") == "updated":
+                updated.append((m, res))
+        return render_template_string(CHECK_ALL_TEMPLATE, results=updated)
 
     @app.route("/delete/<int:monitor_id>", methods=["POST"])
     def delete(monitor_id):
@@ -140,12 +142,16 @@ CHECK_RESULT_TEMPLATE = """
 CHECK_ALL_TEMPLATE = """
 <!doctype html>
 <title>Resultados</title>
-<h1>Resultados de todas as verificações</h1>
+<h1>Alterações detectadas</h1>
+{% if results %}
 <ul>
   {% for m, r in results %}
     <li>{{m.name}} ({{m.url}}) → {{r.status}} - {{r.summary}}</li>
   {% endfor %}
 </ul>
+{% else %}
+<p>Nenhuma alteração detectada.</p>
+{% endif %}
 <p><a href="/">Voltar</a></p>
 """
 
