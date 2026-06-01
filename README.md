@@ -1,17 +1,18 @@
 # Fiscal Monitor
 
-Sistema simples de monitoramento de páginas web para detectar alterações de conteúdo e enviar notificações para Microsoft Teams.
+Sistema simples de monitoramento de páginas web para detectar alterações de conteúdo com interface web.
 
 ## Funcionalidades
 
-- Cadastro de URLs para monitoramento
+- Cadastro de URLs para monitoramento via interface web
 - Importação de listas em CSV ou JSON
-- Verificação manual com `run`
+- Verificação manual via interface web ou CLI
 - Armazenamento local em SQLite
 - Detecção de mudança por hash de conteúdo limpo
 - Ignora scripts, estilos e cabeçalhos irrelevantes
-- Integração com Microsoft Teams via webhook
-- Histórico de checagens
+- Filtro de alterações: mostra apenas sites que sofreram mudanças
+- Histórico completo de checagens
+- Exclusão de monitores
 
 ## Instalação
 
@@ -30,49 +31,62 @@ pip install -r requirements.txt
 
 ## Uso
 
-### Adicionar um monitor
+### Interface Web (Recomendado)
+
+Inicie o servidor web na porta padrão (5000):
 
 ```bash
-python -m monitor add "Manuais NF-e - Ambiente Nacional " "https://www.fazenda.mg.gov.br/empresas/legislacao_tributaria/atos_normativos/" --selector ".data-pub"
+python -m monitor serve
 ```
 
-### Listar monitores
+Ou customize host e porta:
+
+```bash
+python -m monitor serve --host 0.0.0.0 --port 8080
+```
+
+Acesse no navegador: `http://localhost:5000`
+
+**Funcionalidades da interface:**
+- **Adicionar monitor:** Preencha nome, URL e seletor CSS (opcional)
+- **Verificar um monitor:** Clique no botão "Verificar" na linha desejada
+- **Verificar todos:** Clique "Verificar todos" para executar todas as verificações e ver apenas os com alterações
+- **Ver histórico:** Clique "Histórico" para ver todos os checks anteriores
+- **Excluir monitor:** Clique "Excluir" para remover um monitor
+
+### Linha de Comando (CLI)
+
+Para adicionar monitores via terminal:
+
+```bash
+python -m monitor add "Manuais NF-e - Ambiente Nacional" "https://www.fazenda.mg.gov.br/empresas/legislacao_tributaria/atos_normativos/" --selector ".data-pub"
+```
+
+Listar monitores:
 
 ```bash
 python -m monitor list
 ```
 
-### Importar CSV
-
-O CSV deve ter pelo menos duas colunas: `name,url` e opcional `selector`.
+Importar CSV:
 
 ```bash
 python -m monitor import urls.csv
 ```
 
-### Importar JSON
-
-O JSON deve ser uma lista de objetos com `name` e `url`.
+Importar JSON:
 
 ```bash
 python -m monitor import urls.json
 ```
 
-### Configurar webhook do Teams
-
-```bash
-python -m monitor config --webhook "https://outlook.office.com/webhook/SEU_WEBHOOK"
-```
-
-### Executar verificação imediata
+Executar verificação imediata:
 
 ```bash
 python -m monitor run
 ```
 
-Se o webhook estiver configurado, alterações detectadas serão enviadas automaticamente para o Teams.
-
-### Ver histórico de um monitor
+Ver histórico:
 
 ```bash
 python -m monitor history 1
@@ -85,33 +99,52 @@ python -m monitor history 1
 3. Se for informado um seletor CSS, monitora apenas essa parte da página.
 4. Gera um hash SHA256 do texto limpo.
 5. Compara com o hash salvo da última verificação.
-6. Se houver diferença, marca como `updated` e envia notificação.
-
-## Configuração do Microsoft Teams
-
-1. Crie um conector de entrada (Incoming Webhook) no canal do Teams.
-2. Copie o URL gerado.
-3. Execute o comando de configuração do CLI:
-
-```bash
-python -m monitor config --webhook "SEU_WEBHOOK_DO_TEAMS"
-```
+6. Se houver diferença, marca como `updated` e exibe na interface web.
+7. Todo o histórico de verificações é armazenado localmente em SQLite.
 
 ## Estrutura do projeto
 
 - `monitor/` - código do aplicativo
+  - `web.py` - interface web Flask
+  - `cli.py` - interface de linha de comando
+  - `storage.py` - camada de dados SQLite
+  - `fetcher.py` - download de páginas
+  - `utils.py` - funções utilitárias
 - `data/` - banco de dados SQLite gerado em tempo de execução
 - `requirements.txt` - dependências Python
 - `README.md` - instruções
 
 ## Notas
 
-- O projeto foi pensado para funcionar com sites governamentais, usando cabeçalhos de navegador e tempo maior de timeout.
+- O projeto foi pensado para funcionar com sites governamentais, usando cabeçalhos de navegador e timeout maior.
+- Todas as datas são exibidas em horário de Brasília (UTC-3).
 - Para páginas muito restritivas, ajuste o seletor CSS ou use uma opção de proxy / headless browser fora deste projeto.
+- A interface web é recomendada para uso diário, pois oferece uma experiência mais intuitiva.
 
 ## Exemplo de CSV
+
+Para usar com `python -m monitor import urls.csv`, crie um arquivo com as colunas: `name`, `url`, `selector` (opcional).
 
 ```csv
 "SEFAZ MG - NTs","https://www.fazenda.mg.gov.br/empresas/legislacao_tributaria/atos_normativos/",".data-pub"
 "Receita Federal - EFD-Reinf","https://www.gov.br/receitafederal/pt-br/assuntos/orientacao-tributaria/declaracoes-e-demonstrativos/efd-reinf",".document-date"
+```
+
+## Exemplo de JSON
+
+Para usar com `python -m monitor import urls.json`, crie um arquivo no formato:
+
+```json
+[
+  {
+    "name": "SEFAZ MG - NTs",
+    "url": "https://www.fazenda.mg.gov.br/empresas/legislacao_tributaria/atos_normativos/",
+    "selector": ".data-pub"
+  },
+  {
+    "name": "Receita Federal - EFD-Reinf",
+    "url": "https://www.gov.br/receitafederal/pt-br/assuntos/orientacao-tributaria/declaracoes-e-demonstrativos/efd-reinf",
+    "selector": ".document-date"
+  }
+]
 ```

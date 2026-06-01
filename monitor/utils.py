@@ -1,6 +1,23 @@
 import hashlib
 import re
+from datetime import datetime, timedelta, timezone
 from bs4 import BeautifulSoup, Comment
+
+
+def format_datetime_br(iso_string):
+    """Converte ISO string (UTC) para formato brasileiro com timezone BR (UTC-3)."""
+    if not iso_string:
+        return "-"
+    try:
+        # Parse ISO string (ex: "2024-06-01T10:30:45Z")
+        dt_utc = datetime.fromisoformat(iso_string.replace("Z", "+00:00"))
+        # Converter para timezone Brasil (UTC-3)
+        tz_br = timezone(timedelta(hours=-3))
+        dt_br = dt_utc.astimezone(tz_br)
+        # Formatar: DD/MM/YYYY HH:MM:SS
+        return dt_br.strftime("%d/%m/%Y %H:%M:%S")
+    except Exception:
+        return iso_string
 
 
 def clean_html_content(html_text, selector=None):

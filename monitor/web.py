@@ -3,7 +3,7 @@ from datetime import datetime
 
 from .storage import MonitorStorage
 from .fetcher import FetchError, PageFetcher
-from .utils import compute_hash
+from .utils import compute_hash, format_datetime_br
 
 
 def create_app():
@@ -14,6 +14,9 @@ def create_app():
     def index():
         storage = MonitorStorage()
         monitors = storage.list_monitors()
+        # Formatar datas em tempo do Brasil
+        for m in monitors:
+            m["last_checked"] = format_datetime_br(m["last_checked"])
         return render_template_string(INDEX_TEMPLATE, monitors=monitors)
 
     @app.route("/add", methods=["POST"])
@@ -83,8 +86,11 @@ def create_app():
         monitor = storage.get_monitor(monitor_id)
         if not monitor:
             return redirect(url_for("index"))
-        history = storage.get_history(monitor_id, limit=100)
-        return render_template_string(HISTORY_TEMPLATE, monitor=monitor, history=history)
+        history_list = storage.get_history(monitor_id, limit=100)
+        # Formatar datas em tempo do Brasil
+        for row in history_list:
+            row["checked_at"] = format_datetime_br(row["checked_at"])
+        return render_template_string(HISTORY_TEMPLATE, monitor=monitor, history=history_list)
 
     return app
 
