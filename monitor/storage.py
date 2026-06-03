@@ -30,7 +30,8 @@ class MonitorStorage:
                 "last_hash TEXT,"
                 "last_status TEXT,"
                 "last_checked TEXT,"
-                "last_error TEXT"
+                "last_error TEXT,"
+                "last_content TEXT"
                 ")"
             )
             conn.execute(
@@ -50,11 +51,13 @@ class MonitorStorage:
                 "value TEXT"
                 ")"
             )
-            # Ensure 'color' column exists in monitors table (migration for older DBs)
+            # Ensure 'color' and 'last_content' columns exist in monitors table (migration for older DBs)
             info = conn.execute("PRAGMA table_info(monitors)").fetchall()
             col_names = [row["name"] for row in info]
             if "color" not in col_names:
                 conn.execute("ALTER TABLE monitors ADD COLUMN color TEXT")
+            if "last_content" not in col_names:
+                conn.execute("ALTER TABLE monitors ADD COLUMN last_content TEXT")
 
     def add_monitor(self, name, url, selector=None):
         with self._connect() as conn:
@@ -72,12 +75,12 @@ class MonitorStorage:
             row = conn.execute("SELECT * FROM monitors WHERE id = ?", (monitor_id,)).fetchone()
             return dict(row) if row else None
 
-    def update_check_result(self, monitor_id, status, new_hash=None, error=None):
+    def update_check_result(self, monitor_id, status, new_hash=None, error=None, content_snapshot=None):
         now = datetime.utcnow().isoformat() + "Z"
         with self._connect() as conn:
             conn.execute(
-                "UPDATE monitors SET last_hash = ?, last_status = ?, last_checked = ?, last_error = ? WHERE id = ?",
-                (new_hash, status, now, error, monitor_id),
+                "UPDATE monitors SET last_hash = ?, last_status = ?, last_checked = ?, last_error = ?, last_content = ? WHERE id = ?",
+                (new_hash, status, now, error, content_snapshot, monitor_id),
             )
             conn.execute(
                 "INSERT INTO history (monitor_id, checked_at, status, hash, error) VALUES (?, ?, ?, ?, ?)",

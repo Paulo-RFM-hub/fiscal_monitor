@@ -1,11 +1,18 @@
-from flask import Flask, render_template_string, request, redirect, url_for, jsonify
+import json
+import re
 from datetime import datetime
 from urllib.parse import urlparse
-import re
+
+from flask import Flask, jsonify, render_template_string, request, redirect, url_for
 
 from .storage import MonitorStorage
 from .fetcher import FetchError, PageFetcher
-from .utils import compute_hash, format_datetime_br
+from .utils import (
+    compare_sections,
+    compute_hash,
+    format_datetime_br,
+    segment_html_sections,
+)
 
 
 def create_app():
@@ -35,8 +42,20 @@ def create_app():
     def _check_monitor(storage, monitor):
         fetcher = PageFetcher(timeout=30)
         try:
-            content = fetcher.fetch(monitor["url"], monitor.get("selector"))
-            current_hash = compute_hash(content)
+            html = fetcher.fetch(monitor["url"], raw=True)
+            current_sections = segment_html_sections(html, monitor.get("selector"))
+            current_snapshot = json.dumps(current_sections, ensure_ascii=False)
+            current_hash = compute_hash(current_snapshot)
+
+            previous_sections = []
+            if monitor.get("last_content"):
+                try:
+                    previous_sections = json.loads(monitor["last_content"])
+                except Exception:
+                    previous_sections = []
+
+            diff = compare_sections(previous_sections, current_sections)
+
             if not monitor["last_hash"]:
                 status = "ok"
                 summary = "Primeira verificação ou base inicializada."
@@ -52,9 +71,11 @@ def create_app():
             error = str(exc)
             summary = "Falha ao baixar a página."
             current_hash = monitor.get("last_hash")
+            current_snapshot = monitor.get("last_content")
+            diff = {"alterado": False, "secoes_modificadas": [], "itens_adicionados": [], "itens_removidos": []}
 
-        storage.update_check_result(monitor["id"], status, current_hash, error)
-        return {"status": status, "summary": summary, "error": error}
+        storage.update_check_result(monitor["id"], status, current_hash, error, current_snapshot)
+        return {"status": status, "summary": summary, "error": error, "diff": diff}
 
     @app.route("/check/<int:monitor_id>", methods=["POST"])
     def check(monitor_id):
@@ -348,6 +369,38 @@ CHECK_RESULT_TEMPLATE = """
 <p>Status: {{result.status}}</p>
 <p>Resumo: {{result.summary}}</p>
 <p>Erro: {{result.error or '-'}}</p>
+{% if result.diff and result.diff.alterado %}
+  <h2>Resumo das mudanças</h2>
+  <p>Seções modificadas: {{result.diff.secoes_modificadas|length}}</p>
+  <p>Itens adicionados: {{result.diff.itens_adicionados|length}}</p>
+  <p>Itens removidos: {{result.diff.itens_removidos|length}}</p>
+  {% if result.diff.secoes_modificadas %}
+  <h3>Seções modificadas</h3>
+  <ul>
+    {% for section in result.diff.secoes_modificadas %}
+      <li><strong>{{ section.label }}</strong>
+        <pre style="white-space:pre-wrap;background:#f8f8f8;padding:8px;border:1px solid #ddd;">{{ section.diff|join("\n") }}</pre>
+      </li>
+    {% endfor %}
+  </ul>
+  {% endif %}
+  {% if result.diff.itens_adicionados %}
+  <h3>Seções adicionadas</h3>
+  <ul>
+    {% for item in result.diff.itens_adicionados %}
+      <li>{{ item.label }}</li>
+    {% endfor %}
+  </ul>
+  {% endif %}
+  {% if result.diff.itens_removidos %}
+  <h3>Seções removidas</h3>
+  <ul>
+    {% for item in result.diff.itens_removidos %}
+      <li>{{ item.label }}</li>
+    {% endfor %}
+  </ul>
+  {% endif %}
+{% endif %}
 <p><a href="/">Voltar</a> | <a href="/history/{{monitor.id}}">Ver histórico</a></p>
 """
 
