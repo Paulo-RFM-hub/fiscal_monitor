@@ -1,6 +1,7 @@
 from flask import Flask, render_template_string, request, redirect, url_for
 from datetime import datetime
 from urllib.parse import urlparse
+import re
 
 from .storage import MonitorStorage
 from .fetcher import FetchError, PageFetcher
@@ -90,13 +91,33 @@ def create_app():
       name = request.form.get("name")
       url = request.form.get("url")
       selector = request.form.get("selector") or None
-      # Validação simples
+      # color handling: if remove_color present -> color=None
+      remove_color = request.form.get("remove_color")
+      existing_color = request.form.get("existing_color") or None
+      color_changed = request.form.get("color_changed")
+      color_val = request.form.get("color")
+
+      # Validação básica
       if not name or not url:
         return redirect(url_for("index", err="Nome e URL são obrigatórios"))
       parsed = urlparse(url)
       if not parsed.scheme or not parsed.netloc:
         return redirect(url_for("index", err="URL inválida"))
-      storage.update_monitor(monitor_id, name, url, selector)
+
+      # Determine resulting color value
+      if remove_color:
+        color = None
+      elif color_changed == '1':
+        color = color_val or None
+      else:
+        color = existing_color or None
+
+      # Validate color format if provided
+      if color:
+        if not re.match(r'^#([0-9a-fA-F]{3}|[0-9a-fA-F]{6})$', color):
+          return redirect(url_for("index", err="Cor inválida"))
+
+      storage.update_monitor(monitor_id, name, url, selector, color)
       return redirect(url_for("index", msg="edit_success"))
 
     @app.route("/history/<int:monitor_id>")
@@ -154,7 +175,7 @@ INDEX_TEMPLATE = """
   {% for m in monitors %}
   <tr>
     <td>{{m.id}}</td>
-    <td>{{m.name}}</td>
+    <td {% if m.color %} style="background-color:{{m.color}}; padding:4px;"{% endif %}>{{m.name}}</td>
     <td><a href="{{m.url}}" target="_blank">link</a></td>
     <td>{{m.selector or '-'}}</td>
     <td>{{m.last_checked or '-'}}</td>
@@ -162,7 +183,7 @@ INDEX_TEMPLATE = """
     <td>
       <form action="/check/{{m.id}}" method="post" class="actions-form"><button type="submit">Verificar</button></form>
       <a href="/history/{{m.id}}">Histórico</a>
-      <button class="btn" onclick="openEditModal('{{m.id}}','{{m.name|e}}','{{m.url|e}}','{{m.selector|e}}')">Editar</button>
+      <button class="btn" onclick="openEditModal('{{m.id}}','{{m.name|e}}','{{m.url|e}}','{{m.selector|e}}','{{m.color or ''}}')">Editar</button>
       <form action="/delete/{{m.id}}" method="post" class="actions-form"><button type="submit" onclick="return confirm('Excluir monitor?')">Excluir</button></form>
     </td>
   </tr>
@@ -187,6 +208,14 @@ INDEX_TEMPLATE = """
         <label>Seletor CSS (opcional)</label><br>
         <input name="selector" id="edit_selector" style="width:100%">
       </div>
+      <div>
+        <label>Cor do Nome</label><br>
+        <input type="color" id="edit_color" style="width:60px;">
+        <input type="hidden" name="color" id="color_field">
+        <label style="margin-left:8px;"><input type="checkbox" id="remove_color" name="remove_color" value="1"> Remover cor</label>
+        <input type="hidden" name="existing_color" id="existing_color">
+        <input type="hidden" name="color_changed" id="color_changed" value="0">
+      </div>
       <div class="modal-actions">
         <button type="button" onclick="closeEditModal()">Cancelar</button>
         <button type="submit">Salvar</button>
@@ -196,11 +225,19 @@ INDEX_TEMPLATE = """
 </div>
 
 <script>
-function openEditModal(id, name, url, selector) {
+function openEditModal(id, name, url, selector, color) {
   var modal = document.getElementById('editModal');
   document.getElementById('edit_name').value = name || '';
   document.getElementById('edit_url').value = url || '';
   document.getElementById('edit_selector').value = selector || '';
+  // color handling
+  document.getElementById('existing_color').value = color || '';
+  var colorInput = document.getElementById('edit_color');
+  colorInput.value = color || '#000000';
+  document.getElementById('remove_color').checked = false;
+  document.getElementById('color_changed').value = '0';
+  colorInput.onchange = function(){ document.getElementById('color_changed').value = '1'; document.getElementById('color_field').value = colorInput.value; };
+  document.getElementById('remove_color').onchange = function(){ if(this.checked){ colorInput.disabled = true; document.getElementById('color_field').value = ''; } else { colorInput.disabled = false; document.getElementById('color_field').value = colorInput.value; }};
   var form = document.getElementById('editForm');
   form.action = '/edit/' + id;
   modal.style.display = 'block';
@@ -219,6 +256,9 @@ document.getElementById('editForm').addEventListener('submit', function(e){
     var p = new URL(url);
     if(!p.protocol || !p.hostname){ throw 1; }
   }catch(err){ alert('URL inválida'); e.preventDefault(); return; }
+  // ensure color_field is set if changed
+  var colorChanged = document.getElementById('color_changed').value === '1';
+  if(colorChanged){ document.getElementById('color_field').value = document.getElementById('edit_color').value; }
 });
 
 // Close modal when clicking outside

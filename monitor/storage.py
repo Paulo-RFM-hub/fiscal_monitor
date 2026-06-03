@@ -50,6 +50,11 @@ class MonitorStorage:
                 "value TEXT"
                 ")"
             )
+            # Ensure 'color' column exists in monitors table (migration for older DBs)
+            info = conn.execute("PRAGMA table_info(monitors)").fetchall()
+            col_names = [row["name"] for row in info]
+            if "color" not in col_names:
+                conn.execute("ALTER TABLE monitors ADD COLUMN color TEXT")
 
     def add_monitor(self, name, url, selector=None):
         with self._connect() as conn:
@@ -121,11 +126,11 @@ class MonitorStorage:
             conn.execute("DELETE FROM history WHERE monitor_id = ?", (monitor_id,))
             conn.execute("DELETE FROM monitors WHERE id = ?", (monitor_id,))
 
-    def update_monitor(self, monitor_id, name, url, selector=None):
+    def update_monitor(self, monitor_id, name, url, selector=None, color=None):
         with self._connect() as conn:
             conn.execute(
-                "UPDATE monitors SET name = ?, url = ?, selector = ? WHERE id = ?",
-                (name.strip(), url.strip(), selector.strip() if selector else None, monitor_id),
+                "UPDATE monitors SET name = ?, url = ?, selector = ?, color = ? WHERE id = ?",
+                (name.strip(), url.strip(), selector.strip() if selector else None, color.strip() if color else None, monitor_id),
             )
 
     def set_config(self, key, value):
