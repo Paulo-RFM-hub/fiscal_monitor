@@ -1,4 +1,4 @@
-from flask import Flask, render_template_string, request, redirect, url_for
+from flask import Flask, render_template_string, request, redirect, url_for, jsonify
 from datetime import datetime
 from urllib.parse import urlparse
 import re
@@ -64,6 +64,21 @@ def create_app():
             return redirect(url_for("index"))
         result = _check_monitor(storage, monitor)
         return render_template_string(CHECK_RESULT_TEMPLATE, monitor=monitor, result=result)
+
+    @app.route('/api/monitors')
+    def api_monitors():
+        storage = MonitorStorage()
+        monitors = storage.list_monitors()
+        return jsonify(monitors)
+
+    @app.route('/api/check/<int:monitor_id>', methods=['POST'])
+    def api_check(monitor_id):
+        storage = MonitorStorage()
+        monitor = storage.get_monitor(monitor_id)
+        if not monitor:
+            return jsonify({'error': 'not found'}), 404
+        result = _check_monitor(storage, monitor)
+        return jsonify(result)
 
     @app.route("/check_all", methods=["POST"])
     def check_all():
@@ -167,9 +182,16 @@ INDEX_TEMPLATE = """
   <input name="selector" placeholder="Seletor CSS (opcional)">
   <button type="submit">Adicionar</button>
 </form>
-<form action="/check_all" method="post" style="margin-top:10px;">
-  <button type="submit">Verificar todos</button>
-</form>
+<div style="margin-top:10px;">
+  <button id="checkAllBtn" onclick="startCheckAll()">Verificar todos</button>
+</div>
+<div id="progressWrapper" style="display:none;margin-top:10px;">
+  <div style="width:100%;background:#eee;height:20px;border:1px solid #ccc;">
+    <div id="progressBar" style="width:0%;height:100%;background:#4caf50;"></div>
+  </div>
+  <div id="progressText" style="margin-top:4px;">0%</div>
+  <button id="cancelBtn" onclick="cancelCheckAll()" style="margin-top:6px;">Cancelar</button>
+</div>
 <table cellpadding=6 cellspacing=0 style="margin-top:10px;border-collapse:collapse;">
   <tr><th>ID</th><th>Nome</th><th>URL</th><th>Selector</th><th>Último Check</th><th>Status</th><th>Ações</th></tr>
   {% for m in monitors %}
@@ -265,6 +287,55 @@ document.getElementById('editForm').addEventListener('submit', function(e){
 window.onclick = function(event) {
   var modal = document.getElementById('editModal');
   if (event.target == modal) { closeEditModal(); }
+}
+</script>
+
+<script>
+let checkCancelled = false;
+async function startCheckAll(){
+  var btn = document.getElementById('checkAllBtn');
+  btn.disabled = true;
+  checkCancelled = false;
+  var wrapper = document.getElementById('progressWrapper');
+  var bar = document.getElementById('progressBar');
+  var text = document.getElementById('progressText');
+  wrapper.style.display = 'block';
+  bar.style.width = '0%';
+  text.innerText = '0%';
+  try{
+    let resp = await fetch('/api/monitors');
+    if(!resp.ok){ throw new Error('Falha ao obter lista de monitors'); }
+    let monitors = await resp.json();
+    const total = monitors.length;
+    if(total === 0){ text.innerText = 'Nenhum monitor para verificar.'; btn.disabled = false; return; }
+    let completed = 0;
+    for(const m of monitors){
+      if(checkCancelled) break;
+      try{
+        await fetch('/api/check/' + m.id, { method: 'POST' });
+      }catch(err){ /* ignore per-item errors, they'll be recorded in backend */ }
+      completed++;
+      const percent = Math.round((completed / total) * 100);
+      bar.style.width = percent + '%';
+      text.innerText = `${completed} de ${total} (${percent}%)`;
+    }
+    if(!checkCancelled){
+      bar.style.width = '100%';
+      text.innerText = 'Verificação concluída.';
+      setTimeout(()=> location.reload(), 700);
+    } else {
+      text.innerText = `Cancelado (${completed} de ${total})`;
+    }
+  }catch(err){
+    text.innerText = 'Erro: ' + err.message;
+  } finally {
+    btn.disabled = false;
+    document.getElementById('cancelBtn').disabled = false;
+  }
+}
+function cancelCheckAll(){
+  checkCancelled = true;
+  document.getElementById('cancelBtn').disabled = true;
 }
 </script>
 """
