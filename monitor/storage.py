@@ -121,6 +121,13 @@ class MonitorStorage:
             conn.execute("DELETE FROM history WHERE monitor_id = ?", (monitor_id,))
             conn.execute("DELETE FROM monitors WHERE id = ?", (monitor_id,))
 
+    def update_monitor(self, monitor_id, name, url, selector=None):
+        with self._connect() as conn:
+            conn.execute(
+                "UPDATE monitors SET name = ?, url = ?, selector = ? WHERE id = ?",
+                (name.strip(), url.strip(), selector.strip() if selector else None, monitor_id),
+            )
+
     def set_config(self, key, value):
         with self._connect() as conn:
             conn.execute(
