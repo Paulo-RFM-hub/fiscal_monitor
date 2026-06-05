@@ -1,9 +1,11 @@
+import csv
+import io
 import json
 import re
 from datetime import datetime
 from urllib.parse import urlparse
 
-from flask import Flask, jsonify, render_template_string, request, redirect, url_for
+from flask import Flask, jsonify, render_template_string, request, redirect, url_for, send_file
 
 from .storage import MonitorStorage
 from .fetcher import FetchError, PageFetcher
@@ -168,6 +170,100 @@ def create_app():
             row["checked_at"] = format_datetime_br(row["checked_at"])
         return render_template_string(HISTORY_TEMPLATE, monitor=monitor, history=history_list)
 
+    @app.route("/export-csv")
+    def export_csv():
+        """Exportar todos os monitores em CSV"""
+        storage = MonitorStorage()
+        monitors = storage.list_monitors()
+        
+        # Criar arquivo CSV em memória
+        output = io.StringIO()
+        writer = csv.DictWriter(output, fieldnames=['name', 'url', 'selector'], lineterminator='\n')
+        writer.writeheader()
+        
+        for monitor in monitors:
+            writer.writerow({
+                'name': monitor['name'],
+                'url': monitor['url'],
+                'selector': monitor['selector'] or ''
+            })
+        
+        # Converter para bytes
+        csv_content = output.getvalue()
+        
+        # Criar resposta com arquivo para download
+        return send_file(
+            io.BytesIO(csv_content.encode('utf-8')),
+            mimetype='text/csv',
+            as_attachment=True,
+            download_name='monitores.csv'
+        )
+
+    @app.route("/import-csv", methods=['POST'])
+    def import_csv():
+        """Importar monitores de arquivo CSV"""
+        if 'file' not in request.files:
+            return redirect(url_for("index", err="Nenhum arquivo selecionado"))
+        
+        file = request.files['file']
+        if file.filename == '':
+            return redirect(url_for("index", err="Nenhum arquivo selecionado"))
+        
+        if not file.filename.lower().endswith('.csv'):
+            return redirect(url_for("index", err="Arquivo deve ser CSV"))
+        
+        try:
+            # Ler e decodificar o arquivo
+            stream = io.TextIOWrapper(file.stream, encoding='utf-8')
+            reader = csv.DictReader(stream)
+            
+            storage = MonitorStorage()
+            imported_count = 0
+            skipped_count = 0
+            errors = []
+            
+            for row_num, row in enumerate(reader, start=2):  # start=2 porque a primeira linha é cabeçalho
+                try:
+                    name = row.get('name', '').strip() if row.get('name') else None
+                    url = row.get('url', '').strip() if row.get('url') else None
+                    selector = row.get('selector', '').strip() if row.get('selector') else None
+                    
+                    # Validações
+                    if not name or not url:
+                        skipped_count += 1
+                        continue
+                    
+                    # Validar formato de URL
+                    parsed = urlparse(url)
+                    if not parsed.scheme or not parsed.netloc:
+                        errors.append(f"Linha {row_num}: URL inválida ({url})")
+                        skipped_count += 1
+                        continue
+                    
+                    # Verificar se já existe
+                    existing = storage.list_monitors()
+                    if any(m['url'] == url for m in existing):
+                        skipped_count += 1
+                        continue
+                    
+                    # Adicionar monitor
+                    storage.add_monitor(name, url, selector or None)
+                    imported_count += 1
+                    
+                except Exception as e:
+                    errors.append(f"Linha {row_num}: {str(e)}")
+                    skipped_count += 1
+            
+            # Preparar mensagem de sucesso
+            msg = f"Importados {imported_count} monitor(s)"
+            if skipped_count > 0:
+                msg += f", {skipped_count} ignorado(s)"
+            
+            return redirect(url_for("index", msg=msg, errors="|".join(errors) if errors else None))
+            
+        except Exception as e:
+            return redirect(url_for("index", err=f"Erro ao processar CSV: {str(e)}"))
+
     return app
 
 
@@ -193,9 +289,11 @@ INDEX_TEMPLATE = """
 <h1>Monitores</h1>
 {% if request.args.get('msg') == 'edit_success' %}
   <div style="padding:8px;background:#e6ffea;border:1px solid #b7f5c9;margin-bottom:10px;">Edição salva com sucesso.</div>
+{% elif request.args.get('msg') %}
+  <div style="padding:8px;background:#e6ffea;border:1px solid #b7f5c9;margin-bottom:10px;">✓ {{ request.args.get('msg') }}</div>
 {% endif %}
 {% if request.args.get('err') %}
-  <div style="padding:8px;background:#ffe6e6;border:1px solid #f5b7b7;margin-bottom:10px;">Erro: {{ request.args.get('err') }}</div>
+  <div style="padding:8px;background:#ffe6e6;border:1px solid #f5b7b7;margin-bottom:10px;">✗ Erro: {{ request.args.get('err') }}</div>
 {% endif %}
 <form action="/add" method="post">
   <input name="name" placeholder="Nome" required>
@@ -205,6 +303,11 @@ INDEX_TEMPLATE = """
 </form>
 <div style="margin-top:10px;">
   <button id="checkAllBtn" onclick="startCheckAll()">Verificar todos</button>
+  <a href="/export-csv" style="margin-left:10px;"><button type="button">📥 Exportar CSV</button></a>
+  <button type="button" style="margin-left:10px;" onclick="document.getElementById('csvFileInput').click()">📤 Importar CSV</button>
+  <form id="importForm" action="/import-csv" method="post" enctype="multipart/form-data" style="display:none;">
+    <input type="file" id="csvFileInput" name="file" accept=".csv" onchange="this.form.submit()">
+  </form>
 </div>
 <div id="progressWrapper" style="display:none;margin-top:10px;">
   <div style="width:100%;background:#eee;height:20px;border:1px solid #ccc;">
